@@ -131,7 +131,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const loginGoogle = () => {
-    window.location.href = 'http://localhost:8000/api/v1/auth/login/google';
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+    window.location.href = `${apiBase}/auth/login/google`;
   };
 
   const switchRole = async (newRole: 'employee' | 'manager' | 'leadership' | 'admin') => {

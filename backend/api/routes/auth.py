@@ -8,6 +8,7 @@ Role resolution supports two modes via RBAC_MODE in .env:
 
 import json
 import logging
+import os
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import RedirectResponse
@@ -306,7 +307,8 @@ async def google_callback(
         jwt_token = create_access_token(token_payload)
 
         # SECURITY: Redirect with token in URL fragment (#token=...), never query param
-        frontend_url = f"http://localhost:3000/#token={jwt_token}"
+        frontend_origin = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+        frontend_url = f"{frontend_origin}/#token={jwt_token}"
         return RedirectResponse(url=frontend_url)
 
 
