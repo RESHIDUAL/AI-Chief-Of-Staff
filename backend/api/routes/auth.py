@@ -10,7 +10,7 @@ import json
 import logging
 import os
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -200,20 +200,30 @@ GOOGLE_OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
 
 
+def _get_redirect_uri(request: Request) -> str:
+    backend_url = os.environ.get("BACKEND_URL", "").rstrip("/")
+    if not backend_url:
+        backend_url = str(request.base_url).rstrip("/")
+        if "onrender.com" in backend_url and backend_url.startswith("http://"):
+            backend_url = backend_url.replace("http://", "https://", 1)
+    return f"{backend_url}/api/v1/auth/callback"
+
+
 @router.get("/login/google")
-async def google_login():
+async def google_login(request: Request):
     """Redirect user to Google OAuth 2.0 consent screen."""
-    if not settings.GOOGLE_CLIENT_ID:
+    client_id = (settings.GOOGLE_CLIENT_ID or "").strip('"').strip("'")
+    if not client_id:
         raise HTTPException(
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail="GOOGLE_CLIENT_ID is not configured in .env. Use POST /api/v1/auth/login/demo for dev login.",
+            detail="GOOGLE_CLIENT_ID is not configured in .env.",
         )
 
-    redirect_uri = "http://localhost:8000/api/v1/auth/callback"
+    redirect_uri = _get_redirect_uri(request)
     scope = "openid email profile"
     auth_url = (
         f"{GOOGLE_OAUTH_AUTH_URL}?"
-        f"client_id={settings.GOOGLE_CLIENT_ID}&"
+        f"client_id={client_id}&"
         f"redirect_uri={redirect_uri}&"
         f"response_type=code&"
         f"scope={scope}&"
@@ -225,20 +235,20 @@ async def google_login():
 
 @router.get("/callback")
 async def google_callback(
+    request: Request,
     code: str = "",
     db: AsyncSession = Depends(get_db),
 ):
-    """Handle Google OAuth 2.0 callback, exchange code for user info & issue JWT.
-
-    Redirects to frontend with JWT in URL fragment (#token=...), never a query param.
-    """
+    """Handle Google OAuth 2.0 callback, exchange code for user info & issue JWT."""
     if not code:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Missing OAuth authorization code from Google",
         )
 
-    redirect_uri = "http://localhost:8000/api/v1/auth/callback"
+    client_id = (settings.GOOGLE_CLIENT_ID or "").strip('"').strip("'")
+    client_secret = (settings.GOOGLE_CLIENT_SECRET or "").strip('"').strip("'")
+    redirect_uri = _get_redirect_uri(request)
 
     async with httpx.AsyncClient() as client:
         # 1. Exchange authorization code for tokens
@@ -246,8 +256,8 @@ async def google_callback(
             GOOGLE_OAUTH_TOKEN_URL,
             data={
                 "code": code,
-                "client_id": settings.GOOGLE_CLIENT_ID,
-                "client_secret": settings.GOOGLE_CLIENT_SECRET,
+                "client_id": client_id,
+                "client_secret": client_secret,
                 "redirect_uri": redirect_uri,
                 "grant_type": "authorization_code",
             },
