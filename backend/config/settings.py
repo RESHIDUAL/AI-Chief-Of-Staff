@@ -34,8 +34,13 @@ class Settings(BaseSettings):
 
     @property
     def DATABASE_URL(self) -> str:
-        if self.POSTGRES_URL:
-            return self.POSTGRES_URL.replace("postgres://", "postgresql+asyncpg://", 1).replace("postgresql://", "postgresql+asyncpg://", 1)
+        if self.POSTGRES_URL and self.POSTGRES_URL.startswith(("postgres://", "postgresql://", "postgresql+asyncpg://")):
+            return (
+                self.POSTGRES_URL
+                .replace("postgresql+asyncpg://", "postgresql://", 1)
+                .replace("postgres://", "postgresql+asyncpg://", 1)
+                .replace("postgresql://", "postgresql+asyncpg://", 1)
+            )
         return (
             f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
             f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
@@ -43,8 +48,13 @@ class Settings(BaseSettings):
 
     @property
     def DATABASE_URL_SYNC(self) -> str:
-        if self.POSTGRES_URL:
-            return self.POSTGRES_URL.replace("postgres://", "postgresql+psycopg2://", 1).replace("postgresql://", "postgresql+psycopg2://", 1)
+        if self.POSTGRES_URL and self.POSTGRES_URL.startswith(("postgres://", "postgresql://", "postgresql+psycopg2://")):
+            return (
+                self.POSTGRES_URL
+                .replace("postgresql+psycopg2://", "postgresql://", 1)
+                .replace("postgres://", "postgresql+psycopg2://", 1)
+                .replace("postgresql://", "postgresql+psycopg2://", 1)
+            )
         return (
             f"postgresql+psycopg2://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
             f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
