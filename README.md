@@ -147,7 +147,11 @@ The production build has been verified cleanly:
 - **Drive Ingestion & Deduplication**: Verified Google Drive API sync and pipeline deduplication checks.
 
 ---
+## Report
 
+Saved in the report Folder.
+
+---
 ## License & System Status
 
 Designed for corporate executive automation and decision tracking. Built with Python FastAPI, React Vite, PostgreSQL, Qdrant Cloud, and Lyzr Agentic SDK.
