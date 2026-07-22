@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     QDRANT_API_KEY: str | None = None
     QDRANT_COLLECTION_NAME: str = "org_memory"
     QDRANT_GRPC_PORT: int = 6334
-    QDRANT_PREFER_GRPC: bool = True
+    QDRANT_PREFER_GRPC: bool = False
 
     # PostgreSQL
     POSTGRES_USER: str = "chiefofstaff"
