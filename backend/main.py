@@ -26,15 +26,13 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Startup / shutdown lifecycle."""
     logger.info("Starting AI Chief of Staff backend...")
-    # Initialize Qdrant collection
-    init_collection()
-    logger.info("Qdrant collection ready.")
-    # Initialize PostgreSQL tables
+    # Non-blocking async background initialization
+    import asyncio
     try:
-        await init_db()
-        logger.info("PostgreSQL tables ready.")
+        asyncio.create_task(asyncio.to_thread(init_collection))
+        asyncio.create_task(init_db())
     except Exception as e:
-        logger.warning(f"PostgreSQL init skipped: {e}")
+        logger.warning(f"Background init skipped: {e}")
     yield
     logger.info("Shutting down AI Chief of Staff backend.")
 
