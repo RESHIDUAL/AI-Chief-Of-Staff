@@ -1,0 +1,15 @@
+__pycache__
+*.pyc
+*.pyo
+venv/
+.env
+*.egg-info
+.git
+.gitignore
+*.md
+*.pdf
+*.png
+architecture.*
+frontend/node_modules
+frontend/.next
+frontend/dist

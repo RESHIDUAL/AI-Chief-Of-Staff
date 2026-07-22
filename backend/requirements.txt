@@ -1,0 +1,22 @@
+# Backend
+fastapi
+uvicorn[standard]
+pydantic-settings
+python-dotenv
+
+# Database
+sqlalchemy[asyncio]
+asyncpg
+psycopg2-binary
+alembic
+
+# AI / Agents
+lyzr-python-sdk
+sentence-transformers
+
+# Vector DB
+qdrant-client[grpc]
+
+# Utilities
+python-jose[cryptography]
+httpx

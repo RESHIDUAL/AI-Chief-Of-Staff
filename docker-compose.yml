@@ -1,0 +1,78 @@
+version: "3.9"
+
+services:
+  # ── PostgreSQL (Meeting Metadata DB) ──────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: cos-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-chiefofstaff}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chiefofstaff}
+      POSTGRES_DB: ${POSTGRES_DB:-org_memory}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chiefofstaff -d org_memory"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Qdrant (Organizational Memory — Vector DB) ────────────────────
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: cos-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"   # REST API
+      - "6334:6334"   # gRPC
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:6333/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Backend (FastAPI) ─────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: cos-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_GRPC_PORT: 6334
+      APP_HOST: "0.0.0.0"
+      APP_PORT: "8000"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app/backend  # hot-reload in dev
+
+  # ── Frontend (React Application) ──────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: cos-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  qdrant_data:
