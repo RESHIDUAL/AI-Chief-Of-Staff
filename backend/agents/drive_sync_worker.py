@@ -23,6 +23,17 @@ def get_drive_service():
     from google.oauth2 import service_account
     from googleapiclient.discovery import build
 
+    scopes = ["https://www.googleapis.com/auth/drive.readonly"]
+
+    # 1. Check for raw JSON env var (for cloud deployments like Render)
+    raw_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+    if raw_json and raw_json.strip().startswith("{"):
+        import json
+        info = json.loads(raw_json)
+        credentials = service_account.Credentials.from_service_account_info(info, scopes=scopes)
+        return build("drive", "v3", credentials=credentials)
+
+    # 2. Local file credentials path fallback
     creds_path = settings.GOOGLE_APPLICATION_CREDENTIALS
     if not os.path.isabs(creds_path):
         creds_path = os.path.join(ENV_PATH.parent, creds_path)
@@ -30,7 +41,6 @@ def get_drive_service():
     if not os.path.exists(creds_path):
         raise FileNotFoundError(f"Service account credential file not found at: {creds_path}")
 
-    scopes = ["https://www.googleapis.com/auth/drive.readonly"]
     credentials = service_account.Credentials.from_service_account_file(
         creds_path, scopes=scopes
     )
