@@ -24,6 +24,11 @@ jobs:
           pip install -r backend/requirements.txt
 
       - name: Run Backend Unit & Performance Tests
+        env:
+          LYZR_AGENT_API_KEY: "mock-key-for-ci"
+          LYZR_EXTRACTION_AGENT_ID: "mock-id-for-ci"
+          LYZR_RAG_AGENT_ID: "mock-id-for-ci"
+          JWT_SECRET: "mock-jwt-secret-for-ci"
         run: |
           python -m unittest discover -s tests -p "test_*.py"
 

@@ -11,9 +11,9 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     # Lyzr SDK
-    LYZR_AGENT_API_KEY: str
-    LYZR_EXTRACTION_AGENT_ID: str
-    LYZR_RAG_AGENT_ID: str
+    LYZR_AGENT_API_KEY: str = ""
+    LYZR_EXTRACTION_AGENT_ID: str = ""
+    LYZR_RAG_AGENT_ID: str = ""
 
     # Qdrant
     QDRANT_URL: str = "http://localhost:6333"
