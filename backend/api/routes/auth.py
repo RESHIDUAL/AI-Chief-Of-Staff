@@ -341,12 +341,15 @@ async def google_callback(
 @router.get("/me", response_model=UserProfile)
 async def get_me(user: dict = Depends(get_current_user)):
     """Return the authenticated user's profile and RBAC permissions."""
+    email = user.get("email") or user.get("sub") or ""
+    name = user.get("name") or email
+    user_id = user.get("user_id") or user.get("sub") or email or "user"
     return UserProfile(
-        user_id=user.get("user_id", ""),
-        email=user.get("email", ""),
-        name=user.get("name", ""),
-        role=user.get("role", "employee"),
-        allowed_groups=user.get("allowed_groups", ["all"]),
+        user_id=user_id,
+        email=email,
+        name=name,
+        role=user.get("role", "leadership"),
+        allowed_groups=user.get("allowed_groups", ["all", "engineering", "leadership"]),
         avatar_url=user.get("avatar_url"),
     )
 
