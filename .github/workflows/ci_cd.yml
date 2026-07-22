@@ -56,7 +56,7 @@ jobs:
 
   deploy-gcp-cloud-run:
     needs: [test-backend, test-frontend]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && secrets.GCP_SA_KEY != ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
