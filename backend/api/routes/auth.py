@@ -306,18 +306,19 @@ async def google_callback(
         except Exception as e:
             logger.warning(f"PostgreSQL user upsert skipped: {e}")
 
-        # 5. Issue internal JWT with sub=email (not db id)
+        # 5. Issue internal JWT with sub=email
         token_payload = {
             "sub": email,
             "email": email,
             "name": name,
             "role": role,
             "allowed_groups": allowed_groups,
+            "avatar_url": avatar,
         }
         jwt_token = create_access_token(token_payload)
 
         # SECURITY: Redirect with token in URL fragment (#token=...), never query param
-        frontend_origin = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+        frontend_origin = _get_frontend_url(request)
         frontend_url = f"{frontend_origin}/#token={jwt_token}"
         return RedirectResponse(url=frontend_url)
 

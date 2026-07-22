@@ -47,12 +47,15 @@ def get_drive_service():
     return build("drive", "v3", credentials=credentials)
 
 
-def sync_drive_folder_once() -> List[Dict[str, Any]]:
+def sync_drive_folder_once(force: bool = True) -> List[Dict[str, Any]]:
     """Fetch all new files in the configured Google Drive folder and trigger ingestion."""
     folder_id = settings.GOOGLE_DRIVE_FOLDER_ID
     if not folder_id:
         logger.warning("GOOGLE_DRIVE_FOLDER_ID is not configured in .env")
         return []
+
+    if force:
+        _processed_file_ids.clear()
 
     try:
         service = get_drive_service()
