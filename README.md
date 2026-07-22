@@ -1,54 +1,62 @@
-# 🏛️ AI Chief of Staff (Executive Intelligence & Memory Automation Platform)
+# AI Chief of Staff (Executive Intelligence & Memory Automation Platform)
 
 An enterprise executive automation platform engineered to capture, structure, verify, and recall organizational memory with sub-second accuracy. It converts unstructured meeting dialogue into verified decisions and tasks, enforces strict Role-Based Access Control (RBAC), and serves executive queries with precision.
 
 ---
 
-## 🌟 Key Capabilities & Features
+## Demo Video
 
-- **Google OAuth 2.0 & JWT Authentication**: Enterprise workspace authentication with URL fragment token passing (`#token=...`), protecting credentials from access logs.
-- **Zero-Fallback Policy Extraction Agent**: Extracts real entities (Rohan, Neha, Kabir, Ananya, Vikram, Sneha, Amit, Sarah) and explicit deadlines directly from dialogue without generic mock placeholders.
-- **Human-in-the-Loop (HITL) Review Portal**: Provides an approval interface with 1-click decision and task verification, inline editing, and meeting session deletion.
-- **Dual-Store Persistence Architecture**: Syncs verified items to PostgreSQL for structured metadata/audit logs and Qdrant Cloud for 384-dimensional vector embeddings.
-- **Precision RAG Memory Agent**: Serves natural language executive queries using hybrid vector + keyword scoring ($0.6 \cdot S_{\text{vector}} + 0.4 \cdot S_{\text{keyword}}$), entity pre-filtering, and meeting citations.
-- **Automated Google Drive Sync**: Background polling worker and 1-click Drive sync button to automatically ingest transcript files (`.txt`, `.docx`, Google Docs) from shared Google Drive folders.
-- **Pipeline-Level Deduplication**: Prevents duplicate ingestion when files are re-scanned or re-submitted.
-- **Cloud-Ready Containerization**: Production Dockerfile included for 24/7 deployment on Google Cloud Run, Render, or AWS.
+[![Watch the demo](https://img.shields.io/badge/Watch%20Demo-Google%20Drive-blue?style=for-the-badge&logo=googledrive&logoColor=white)](https://drive.google.com/file/d/1j7ogzK03_VOVbIMK7wgl1ZGRKuvV5owJ/view?usp=sharing)
+
+Click the button above to watch the walkthrough video.
 
 ---
 
-## 🏗️ 5-Layer System Architecture
+## Key Capabilities & Features
+
+- **Google OAuth 2.0 & JWT Authentication**: Enterprise workspace authentication with URL fragment token passing (`#token=...`), protecting credentials from access logs.
+- **Zero Fallback Policy Extraction Agent**: Extracts real entities (Rohan, Neha, Kabir, Ananya, Vikram, Sneha, Amit, Sarah) and explicit deadlines directly from dialogue without generic mock placeholders.
+- **Human in the Loop (HITL) Review Portal**: Provides an approval interface with 1 click decision and task verification, inline editing, and meeting session deletion.
+- **Dual Store Persistence Architecture**: Syncs verified items to PostgreSQL for structured metadata and audit logs, and Qdrant Cloud for 384 dimensional vector embeddings.
+- **Precision RAG Memory Agent**: Serves natural language executive queries using hybrid vector and keyword scoring ($0.6 \cdot S_{\text{vector}} + 0.4 \cdot S_{\text{keyword}}$), entity pre-filtering, and meeting citations.
+- **Automated Google Drive Sync**: Background polling worker and 1 click Drive sync button to automatically ingest transcript files (`.txt`, `.docx`, Google Docs) from shared Google Drive folders.
+- **Pipeline Level Deduplication**: Prevents duplicate ingestion when files are re-scanned or re-submitted.
+- **Cloud Ready Containerization**: Production Dockerfile included for 24/7 deployment on Google Cloud Run, Render, or AWS.
+
+---
+
+## 5 Layer System Architecture
 
 ```
 [Layer 1: Ingestion Engine]
-   │  • Manual Transcript Submission
-   │  • Google Drive Folder Polling Worker (drive_sync_worker.py)
-   │  • GCP Pub/Sub Push Webhook (/api/v1/ingest/pubsub)
-   ▼
+   |  Manual Transcript Submission
+   |  Google Drive Folder Polling Worker (drive_sync_worker.py)
+   |  GCP Pub/Sub Push Webhook (/api/v1/ingest/pubsub)
+   v
 [Layer 2: Extraction & Processing]
-   │  • Lyzr Extraction Agent
-   │  • Rule-Based Dialogue Parser (_extract_from_text_directly)
-   │  • Zero-Fallback Entity & Deadline Formatter
-   ▼
+   |  Lyzr Extraction Agent
+   |  Rule Based Dialogue Parser (_extract_from_text_directly)
+   |  Zero Fallback Entity & Deadline Formatter
+   v
 [Layer 3: Security & RBAC Enforcement]
-   │  • Google OAuth 2.0 Login (/api/v1/auth/login/google)
-   │  • JWT Token Issuance & Signature Verification
-   │  • Role Gatekeeper (General Access vs Leadership Only)
-   ▼
+   |  Google OAuth 2.0 Login (/api/v1/auth/login/google)
+   |  JWT Token Issuance & Signature Verification
+   |  Role Gatekeeper (General Access vs Leadership Only)
+   v
 [Layer 4: Storage & HITL Governance]
-   │  • HITL Review Portal (1-Click Approve / Edit / Delete)
-   │  • Dual-Store PostgreSQL (Relational DB) + Qdrant Cloud (Vector DB)
-   │  • Correction Audit Loop (/api/v1/review/edit/{point_id})
-   ▼
+   |  HITL Review Portal (1 Click Approve / Edit / Delete)
+   |  Dual Store PostgreSQL (Relational DB) + Qdrant Cloud (Vector DB)
+   |  Correction Audit Loop (/api/v1/review/edit/{point_id})
+   v
 [Layer 5: RAG Intelligence Interface]
-   │  • Conversational Memory RAG Agent
-   │  • Entity Precision Filter (Person & Item-Type Scoping)
-   │  • Meeting Citation & Similarity Score Renderer
+   |  Conversational Memory RAG Agent
+   |  Entity Precision Filter (Person & Item Type Scoping)
+   |  Meeting Citation & Similarity Score Renderer
 ```
 
 ---
 
-## 🚀 Quick Start Guide
+## Quick Start Guide
 
 ### Prerequisites
 - Python 3.12+
@@ -113,7 +121,7 @@ Open your browser at `http://localhost:3000` to access the application.
 
 ---
 
-## 📡 API Reference Overview
+## API Reference Overview
 
 | HTTP Method | Endpoint Path | Description | Access Control |
 |---|---|---|---|
@@ -130,7 +138,7 @@ Open your browser at `http://localhost:3000` to access the application.
 
 ---
 
-## 🧪 Verification & Production Build
+## Verification & Production Build
 
 The production build has been verified cleanly:
 
@@ -140,6 +148,6 @@ The production build has been verified cleanly:
 
 ---
 
-## 📄 License & System Status
+## License & System Status
 
 Designed for corporate executive automation and decision tracking. Built with Python FastAPI, React Vite, PostgreSQL, Qdrant Cloud, and Lyzr Agentic SDK.
