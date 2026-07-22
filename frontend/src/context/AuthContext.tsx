@@ -32,6 +32,33 @@ const DEMO_USER_DEFAULT: UserProfile = {
   avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
 };
 
+function parseJwtPayload(token: string): UserProfile | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    const p = JSON.parse(jsonPayload);
+    if (!p || (!p.email && !p.sub)) return null;
+    return {
+      user_id: p.sub || p.email || 'user',
+      email: p.email || p.sub || 'user@gmail.com',
+      name: p.name || p.email || 'Google User',
+      role: p.role || 'leadership',
+      allowed_groups: p.allowed_groups || ['all', 'engineering', 'leadership'],
+      avatar_url: p.avatar_url,
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -51,13 +78,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return null;
   }, []);
 
-  // Fetch user profile from /auth/me using the stored JWT
+  // Fetch user profile from /auth/me or decode JWT payload
   const fetchMe = useCallback(async (jwt: string) => {
     if (jwt === 'demo-token') {
       setUser(DEMO_USER_DEFAULT);
       setToken('demo-token');
       return true;
     }
+
+    const jwtUser = parseJwtPayload(jwt);
+    if (jwtUser) {
+      setUser(jwtUser);
+      setToken(jwt);
+    }
+
     try {
       const res = await apiClient.get('/auth/me', {
         headers: { Authorization: `Bearer ${jwt}` },
@@ -67,12 +101,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return true;
     } catch (e: any) {
       if (e.response?.status === 401) {
-        // Token expired or invalid — clear everything
         localStorage.removeItem('cos_jwt_token');
         setToken(null);
         setUser(null);
+      } else if (jwtUser) {
+        setUser(jwtUser);
+        setToken(jwt);
       } else {
-        // Backend offline or network error fallback for demo token
         setUser(DEMO_USER_DEFAULT);
         setToken(jwt);
       }

@@ -62,7 +62,7 @@ class Settings(BaseSettings):
     LEADERSHIP_GROUP_EMAIL: str = ""
 
     # Google Drive & Pub/Sub Integration
-    GOOGLE_DRIVE_FOLDER_ID: str = ""
+    GOOGLE_DRIVE_FOLDER_ID: str = "1haedKlfAZckDQPMaSv3FVCnG-kZ1JuAp"
     GOOGLE_PUBSUB_PROJECT_ID: str = ""
     GOOGLE_PUBSUB_TOPIC: str = "meeting-transcripts"
 

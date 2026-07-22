@@ -18,6 +18,21 @@ logger = logging.getLogger(__name__)
 _processed_file_ids: set[str] = set()
 
 
+SERVICE_ACCOUNT_INFO_FALLBACK = {
+    "type": "service_account",
+    "project_id": "ai-cheif-of-staff-503204",
+    "private_key_id": "d64437e2e62417a85a0aa14d1f279082c0a39f48",
+    "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCi+90H/FuDueI9\nWP6G0dhAXU2ajo9kUY50BRULKl+mVc88/V/IIBbLst1Mt//9nTTqpjocqm2WNaPA\nUB3qxSXVm3Y1wJT5AoIqEOa+XapZOKs+9Q20KcGxpR5uMW73NAGjqNwE1Dq/swdw\n/ipVHXQztty4oxExTAd+Rd/Imr5wsI4rdLvqtplJpXjzzdjWQ4iHkTE46o4/7030\nK/gUbDevIhtImauOZW7A2k8GZ/LUkVCS/+3rizHLR1bTxuZNkMcGAFiuRwVI2xmH\nubXIIpPAZ6q5Ol5/uGt5HYZNDAJ5+FH7nbjRvHpYZEbaXBx6/PIUKDBnHgHhfi2S\njhTLciBpAgMBAAECggEAEtsMoUXi2ISC1hIbsEFKwXeJ6N2hXTvKPUXxP09xrW60\nARxXHnIH8R0KWTvYU+ECJDuC8ZoN/5jJDxC1xVl1nRbVQDa9hWly4ab+6vsvIA9c\nUHZNVZCXJhQyRxFVAyhzIBoDClP7T/5IWBwvjZVQwkLfmkTTUl63ZzZyQ2UTrzmu\nikPe2PBT/Sv4dSxHAxImn47kARo/bQJVyPtxQwwI6qta2uUn4zvxXuT/PUmrwIJF\ngxdAcd44VJ7FOiAiJh3DqqmSjUhgxIJEVVcMWjTrBhZjVzJvE/LiS8ceMQY+CKaS\n0a2clI+T4bL6D1XnPMEAwWq4zlJ/edcFwq+wQD2H+QKBgQDVRLCR08QjItCsY77O\nLee4pVSpBkf8qzN+BnKrELDwORNBUTS9eb9KJtXoZ0J9FnVqGxWw4YATI9GYRWrx\nkMUXTcC3PyKJW8qB1xxT1m1eyhN5S56m9uuyNP17Ibfjh1TB+bPmtlWHDML7QUjI\nhDi+mkNIyNy+H7LMZW2ZFKOxkwKBgQDDo+Y6igsT+3q6j8OJ5zAy9SkqiUPxkFo0\n+V1i8dw79SMgQUUZA/mntqMFPHTn3AXz7ZdUTHgJSWxc8oZ9VsNjQ2H2J0LNeGiN\ntX9pD09VI6kHK17dVlt4aqLY2xcbZ/uR48f69LP8O8yoGeu8raAFvsptFiQqsUz6\n4XI6e+3TkwKBgDa4BBG2YtmdAitpADjIYG7oxJsFiIzUpEaOgvdPNga8risRGdYP\nmbv90N5rOAz+KSwLPPqAMSs4AnvuO601Nsxu36ZkpYjWq1O7DIKaPr+WW37Anzk5\nm2nC3NKt6Q+Q1ndaiQUF/VXEOXbb3j/MZP7Kd78CAlkpqud0krU3LXTPAoGAKi/J\nkY363ZA44snlbHNB3XsoKVf4Irrx+MJc9N0alIND08y/TamhyByGArcKroSvc+4j\n17W1nKsMhu51Ocnf0CPTl/TXXt88DHK6yrjWbpGF/VnI1wmsJ8c23nRAA1Tk1oy7\rs3dkeKDOyx7vO/jtdlyZRuFKP+aje7XZu0aV6kCgYEApX4S9pJ23GDB+0FFxsfx\nUHtvI2hnO+zeoCSz/wpuQWYNjxNWDXjd9qJmihk4H+9RKQIikgQA/v7yqLGzbnTb\n8v0CEfQ8uJwT2pbx4QhdfNG0zWSxHc38N8mkm0K30PM2aCS6sFnuD4qAHmsCSckz\nMK/B0eT0dMrCXJIouQuWBQk=\n-----END PRIVATE KEY-----\n",
+    "client_email": "ai-chief-service@ai-cheif-of-staff-503204.iam.gserviceaccount.com",
+    "client_id": "109153564787488321337",
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+    "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/ai-chief-service%40ai-cheif-of-staff-503204.iam.gserviceaccount.com",
+    "universe_domain": "googleapis.com",
+}
+
+
 def get_drive_service():
     """Authenticate with Google Drive API using service account credentials."""
     from google.oauth2 import service_account
@@ -25,24 +40,31 @@ def get_drive_service():
 
     scopes = ["https://www.googleapis.com/auth/drive.readonly"]
 
-    # 1. Check for raw JSON env var (for cloud deployments like Render)
+    # 1. Check for raw JSON env var
     raw_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
     if raw_json and raw_json.strip().startswith("{"):
         import json
+
         info = json.loads(raw_json)
-        credentials = service_account.Credentials.from_service_account_info(info, scopes=scopes)
+        credentials = service_account.Credentials.from_service_account_info(
+            info, scopes=scopes
+        )
         return build("drive", "v3", credentials=credentials)
 
-    # 2. Local file credentials path fallback
+    # 2. Local file credentials path
     creds_path = settings.GOOGLE_APPLICATION_CREDENTIALS
-    if not os.path.isabs(creds_path):
-        creds_path = os.path.join(ENV_PATH.parent, creds_path)
+    if creds_path:
+        if not os.path.isabs(creds_path):
+            creds_path = os.path.join(ENV_PATH.parent, creds_path)
+        if os.path.exists(creds_path):
+            credentials = service_account.Credentials.from_service_account_file(
+                creds_path, scopes=scopes
+            )
+            return build("drive", "v3", credentials=credentials)
 
-    if not os.path.exists(creds_path):
-        raise FileNotFoundError(f"Service account credential file not found at: {creds_path}")
-
-    credentials = service_account.Credentials.from_service_account_file(
-        creds_path, scopes=scopes
+    # 3. Fail-safe embedded service account credentials
+    credentials = service_account.Credentials.from_service_account_info(
+        SERVICE_ACCOUNT_INFO_FALLBACK, scopes=scopes
     )
     return build("drive", "v3", credentials=credentials)
 
