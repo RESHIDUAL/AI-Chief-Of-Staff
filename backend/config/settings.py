@@ -28,9 +28,14 @@ class Settings(BaseSettings):
     POSTGRES_HOST: str = "localhost"
     POSTGRES_PORT: int = 5432
     POSTGRES_DB: str = "org_memory"
+    # Managed platforms such as Railway provide one complete PostgreSQL URL.
+    # When supplied, it overrides the individual POSTGRES_* values below.
+    POSTGRES_URL: str = ""
 
     @property
     def DATABASE_URL(self) -> str:
+        if self.POSTGRES_URL:
+            return self.POSTGRES_URL.replace("postgres://", "postgresql+asyncpg://", 1).replace("postgresql://", "postgresql+asyncpg://", 1)
         return (
             f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
             f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
@@ -38,6 +43,8 @@ class Settings(BaseSettings):
 
     @property
     def DATABASE_URL_SYNC(self) -> str:
+        if self.POSTGRES_URL:
+            return self.POSTGRES_URL.replace("postgres://", "postgresql+psycopg2://", 1).replace("postgresql://", "postgresql+psycopg2://", 1)
         return (
             f"postgresql+psycopg2://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
             f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
@@ -58,6 +65,7 @@ class Settings(BaseSettings):
     RBAC_MODE: str = "static"  # "static" (ROLE_TABLE lookup) or "workspace_groups" (Admin SDK)
     ROLE_TABLE: str = "{}"     # JSON map of email -> role, e.g. '{"admin@co.com":"admin"}'
     GOOGLE_APPLICATION_CREDENTIALS: str = ""
+    GOOGLE_SERVICE_ACCOUNT_JSON: str = ""
     GOOGLE_ADMIN_IMPERSONATE_EMAIL: str = ""
     LEADERSHIP_GROUP_EMAIL: str = ""
 

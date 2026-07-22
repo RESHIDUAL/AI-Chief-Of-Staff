@@ -20,6 +20,8 @@ qdrant-client[grpc]
 # Utilities
 python-jose[cryptography]
 httpx
+google-api-python-client
+google-auth
 opentelemetry-api
 opentelemetry-sdk
 opentelemetry-exporter-otlp-proto-http

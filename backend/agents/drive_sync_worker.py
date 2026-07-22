@@ -7,6 +7,7 @@ folder ID from settings.GOOGLE_DRIVE_FOLDER_ID.
 import os
 import time
 import logging
+import json
 from typing import List, Dict, Any
 
 from backend.config.settings import settings, ENV_PATH
@@ -23,17 +24,23 @@ def get_drive_service():
     from google.oauth2 import service_account
     from googleapiclient.discovery import build
 
-    creds_path = settings.GOOGLE_APPLICATION_CREDENTIALS
-    if not os.path.isabs(creds_path):
-        creds_path = os.path.join(ENV_PATH.parent, creds_path)
-
-    if not os.path.exists(creds_path):
-        raise FileNotFoundError(f"Service account credential file not found at: {creds_path}")
-
     scopes = ["https://www.googleapis.com/auth/drive.readonly"]
-    credentials = service_account.Credentials.from_service_account_file(
-        creds_path, scopes=scopes
-    )
+    if settings.GOOGLE_SERVICE_ACCOUNT_JSON:
+        try:
+            credentials = service_account.Credentials.from_service_account_info(
+                json.loads(settings.GOOGLE_SERVICE_ACCOUNT_JSON), scopes=scopes
+            )
+        except json.JSONDecodeError as exc:
+            raise ValueError("GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON") from exc
+    else:
+        creds_path = settings.GOOGLE_APPLICATION_CREDENTIALS
+        if not os.path.isabs(creds_path):
+            creds_path = os.path.join(ENV_PATH.parent, creds_path)
+        if not os.path.exists(creds_path):
+            raise FileNotFoundError(f"Service account credential file not found at: {creds_path}")
+        credentials = service_account.Credentials.from_service_account_file(
+            creds_path, scopes=scopes
+        )
     return build("drive", "v3", credentials=credentials)
 
 

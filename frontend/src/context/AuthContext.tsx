@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { apiClient } from '../api/client';
+import { apiClient, BACKEND_ORIGIN } from '../api/client';
 
 export interface UserProfile {
   user_id: string;
@@ -131,7 +131,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const loginGoogle = () => {
-    window.location.href = 'http://localhost:8000/api/v1/auth/login/google';
+    window.location.href = `${BACKEND_ORIGIN}/api/v1/auth/login/google`;
   };
 
   const switchRole = async (newRole: 'employee' | 'manager' | 'leadership' | 'admin') => {
