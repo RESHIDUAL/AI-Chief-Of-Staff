@@ -70,7 +70,7 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     APP_DEBUG: bool = True
     APP_HOST: str = "0.0.0.0"
-    APP_PORT: int = 8000
+    APP_PORT: int = int(os.environ.get("PORT", os.environ.get("APP_PORT", 8000)))
     CORS_ORIGINS: list[str] = [
         "http://localhost:3000",
         "http://localhost:5173",
