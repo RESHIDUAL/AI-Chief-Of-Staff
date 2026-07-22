@@ -208,7 +208,7 @@ async def google_login():
             detail="GOOGLE_CLIENT_ID is not configured in .env. Use POST /api/v1/auth/login/demo for dev login.",
         )
 
-    redirect_uri = "http://localhost:8000/api/v1/auth/callback"
+    redirect_uri = f"{settings.PUBLIC_BACKEND_URL.rstrip('/')}/api/v1/auth/callback"
     scope = "openid email profile"
     auth_url = (
         f"{GOOGLE_OAUTH_AUTH_URL}?"
@@ -237,7 +237,7 @@ async def google_callback(
             detail="Missing OAuth authorization code from Google",
         )
 
-    redirect_uri = "http://localhost:8000/api/v1/auth/callback"
+    redirect_uri = f"{settings.PUBLIC_BACKEND_URL.rstrip('/')}/api/v1/auth/callback"
 
     async with httpx.AsyncClient() as client:
         # 1. Exchange authorization code for tokens
@@ -306,7 +306,7 @@ async def google_callback(
         jwt_token = create_access_token(token_payload)
 
         # SECURITY: Redirect with token in URL fragment (#token=...), never query param
-        frontend_url = f"http://localhost:3000/#token={jwt_token}"
+        frontend_url = f"{settings.PUBLIC_FRONTEND_URL.rstrip('/')}/#token={jwt_token}"
         return RedirectResponse(url=frontend_url)
 
 

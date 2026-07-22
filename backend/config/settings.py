@@ -87,6 +87,9 @@ class Settings(BaseSettings):
     APP_DEBUG: bool = True
     APP_HOST: str = "0.0.0.0"
     APP_PORT: int = 8000
+    # Public URLs are used by OAuth redirects after deployment.
+    PUBLIC_BACKEND_URL: str = "http://localhost:8000"
+    PUBLIC_FRONTEND_URL: str = "http://localhost:3000"
     CORS_ORIGINS: list[str] = [
         "http://localhost:3000",
         "http://localhost:5173",
