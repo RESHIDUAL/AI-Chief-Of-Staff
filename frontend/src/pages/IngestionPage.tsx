@@ -83,7 +83,8 @@ export const IngestionPage: React.FC = () => {
         setDriveSyncResult('Google Drive scan complete: No new un-ingested files found in folder.');
       }
     } catch (e: any) {
-      setError('Google Drive sync failed. Please verify that your service-account.json and GOOGLE_DRIVE_FOLDER_ID are set in .env.');
+      const detail = e?.response?.data?.detail;
+      setError(`Google Drive sync failed${detail ? `: ${detail}` : '. Check the backend logs and folder sharing permissions.'}`);
     } finally {
       setDriveSyncing(false);
     }

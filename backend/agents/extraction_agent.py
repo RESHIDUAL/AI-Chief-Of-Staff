@@ -8,6 +8,7 @@ import json
 import re
 import time
 import logging
+import hashlib
 from lyzr_python_sdk import LyzrAgentAPI
 from backend.config.settings import settings
 from backend.observability.tracing import agent_span
@@ -185,16 +186,6 @@ def _extract_from_text_directly(transcript: str) -> dict:
                 "confidence_score": 0.85,
             })
 
-    # If no specific keyword triggered, parse text lines directly into items
-    if not decisions and not tasks and lines:
-        for l in lines[:5]:
-            decisions.append({
-                "content": l,
-                "participants": [],
-                "access_level": "general",
-                "confidence_score": 0.75,
-            })
-
     return {"decisions": decisions, "tasks": tasks}
 
 
@@ -211,11 +202,13 @@ def extract_from_transcript(
         raise ValueError("Extraction Error: Transcript text is missing or unreadable. Zero-fallback policy enforced.")
 
     prompt_token_count = len(transcript) // 4
+    prompt_fingerprint = hashlib.sha256(EXTRACTION_SYSTEM_PROMPT.encode()).hexdigest()[:16]
 
     with agent_span("extraction_agent", "extract", {
         "meeting_id": meeting_id,
         "model": "lyzr_extraction",
         "prompt_token_count": prompt_token_count,
+        "prompt_fingerprint": prompt_fingerprint,
     }):
         try:
             client = get_client()

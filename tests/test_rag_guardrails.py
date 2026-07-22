@@ -11,6 +11,7 @@ class TestRAGGuardrails(unittest.TestCase):
         self.assertEqual(_extract_person_name_from_query("What tasks are assigned to Vikram?"), "Vikram")
         self.assertEqual(_extract_person_name_from_query("Show decisions for Amit"), "Amit")
         self.assertEqual(_extract_person_name_from_query("What is Sneha's task?"), "Sneha")
+        self.assertIsNone(_extract_person_name_from_query("Who was assigned to Coordinate with the external verification vendor?"))
 
     def test_entity_specific_precision_filtering(self):
         """Context with multiple people must filter out unmatching team members when a specific person is asked about."""

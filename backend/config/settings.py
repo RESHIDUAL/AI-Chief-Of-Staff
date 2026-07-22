@@ -11,16 +11,16 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     # Lyzr SDK
-    LYZR_AGENT_API_KEY: str = "sk-default-bQDp4vxgOlyrbqJhspDu34f1XfIPjSWB"
-    LYZR_EXTRACTION_AGENT_ID: str = "6a5f492111fc9a484e9584bb"
-    LYZR_RAG_AGENT_ID: str = "6a5f4bfe7976aaac9b9a5f2b"
+    LYZR_AGENT_API_KEY: str
+    LYZR_EXTRACTION_AGENT_ID: str
+    LYZR_RAG_AGENT_ID: str
 
     # Qdrant
     QDRANT_URL: str = "http://localhost:6333"
     QDRANT_API_KEY: str | None = None
     QDRANT_COLLECTION_NAME: str = "org_memory"
     QDRANT_GRPC_PORT: int = 6334
-    QDRANT_PREFER_GRPC: bool = False
+    QDRANT_PREFER_GRPC: bool = True
 
     # PostgreSQL
     POSTGRES_USER: str = "chiefofstaff"
@@ -62,15 +62,23 @@ class Settings(BaseSettings):
     LEADERSHIP_GROUP_EMAIL: str = ""
 
     # Google Drive & Pub/Sub Integration
-    GOOGLE_DRIVE_FOLDER_ID: str = "1haedKlfAZckDQPMaSv3FVCnG-kZ1JuAp"
+    GOOGLE_DRIVE_FOLDER_ID: str = ""
     GOOGLE_PUBSUB_PROJECT_ID: str = ""
     GOOGLE_PUBSUB_TOPIC: str = "meeting-transcripts"
+    # Required for authenticating direct Pub/Sub push deliveries. Configure this
+    # as a secret in the API gateway / Pub/Sub subscription, never in source.
+    PUBSUB_WEBHOOK_TOKEN: str = ""
+
+    # Observability. Set OTEL_EXPORTER_OTLP_ENDPOINT to send spans to Phoenix,
+    # Grafana Tempo, Jaeger, or another OTLP-compatible collector.
+    OTEL_SERVICE_NAME: str = "ai-chief-of-staff"
+    OTEL_EXPORTER_OTLP_ENDPOINT: str = ""
 
     # App
     APP_ENV: str = "development"
     APP_DEBUG: bool = True
     APP_HOST: str = "0.0.0.0"
-    APP_PORT: int = int(os.environ.get("PORT", os.environ.get("APP_PORT", 8000)))
+    APP_PORT: int = 8000
     CORS_ORIGINS: list[str] = [
         "http://localhost:3000",
         "http://localhost:5173",

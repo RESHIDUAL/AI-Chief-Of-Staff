@@ -16,6 +16,9 @@ env/
 # Environment files
 .env
 
+# Local Google service-account credentials
+credentials/
+
 # IDE
 .vscode/
 .idea/
@@ -39,7 +42,3 @@ frontend/build/
 # Generated
 architecture.png
 *.log
-
-# Credentials
-credentials/
-

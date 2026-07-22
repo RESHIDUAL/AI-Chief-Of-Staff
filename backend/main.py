@@ -19,6 +19,10 @@ logging.basicConfig(
     level=logging.DEBUG if settings.APP_DEBUG else logging.INFO,
     format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
 )
+# Application debug mode is useful, but HTTP client wire logs obscure actual
+# operational failures (for example, Qdrant index or database errors).
+for noisy_logger in ("httpcore", "httpx", "urllib3", "qdrant_client"):
+    logging.getLogger(noisy_logger).setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
@@ -26,13 +30,15 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Startup / shutdown lifecycle."""
     logger.info("Starting AI Chief of Staff backend...")
-    # Non-blocking async background initialization
-    import asyncio
+    # Initialize Qdrant collection
+    init_collection()
+    logger.info("Qdrant collection ready.")
+    # Initialize PostgreSQL tables
     try:
-        asyncio.create_task(asyncio.to_thread(init_collection))
-        asyncio.create_task(init_db())
+        await init_db()
+        logger.info("PostgreSQL tables ready.")
     except Exception as e:
-        logger.warning(f"Background init skipped: {e}")
+        logger.warning(f"PostgreSQL init skipped: {e}")
     yield
     logger.info("Shutting down AI Chief of Staff backend.")
 

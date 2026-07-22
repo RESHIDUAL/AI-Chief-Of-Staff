@@ -2,6 +2,7 @@
 
 import time
 import logging
+import os
 from contextlib import contextmanager
 from functools import wraps
 
@@ -11,13 +12,21 @@ try:
     from opentelemetry import trace
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import ConsoleSpanExporter, BatchSpanProcessor
+    from opentelemetry.sdk.resources import Resource
+    from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+    from backend.config.settings import settings
 
-    provider = TracerProvider()
-    provider.add_span_processor(BatchSpanProcessor(ConsoleSpanExporter()))
+    provider = TracerProvider(resource=Resource.create({"service.name": settings.OTEL_SERVICE_NAME}))
+    exporter = (
+        OTLPSpanExporter(endpoint=settings.OTEL_EXPORTER_OTLP_ENDPOINT)
+        if settings.OTEL_EXPORTER_OTLP_ENDPOINT
+        else ConsoleSpanExporter()
+    )
+    provider.add_span_processor(BatchSpanProcessor(exporter))
     trace.set_tracer_provider(provider)
     tracer = trace.get_tracer("ai-chief-of-staff")
     OTEL_AVAILABLE = True
-    logger.info("OpenTelemetry tracing initialized with ConsoleSpanExporter.")
+    logger.info("OpenTelemetry tracing initialized.")
 except ImportError:
     OTEL_AVAILABLE = False
     tracer = None

@@ -1,7 +1,8 @@
 """Unit tests for Extraction Agent JSON parsing, entity extraction, and Zero-Fallback Policy."""
 
 import unittest
-from backend.agents.extraction_agent import extract_from_transcript, _is_generic_placeholder
+import unittest.mock
+from backend.agents.extraction_agent import extract_from_transcript, _is_generic_placeholder, _extract_from_text_directly
 
 
 class TestExtractionAgent(unittest.TestCase):
@@ -44,6 +45,11 @@ class TestExtractionAgent(unittest.TestCase):
         self.assertTrue(_is_generic_placeholder("Generic decision for team"))
         self.assertTrue(_is_generic_placeholder("Mock task description"))
         self.assertFalse(_is_generic_placeholder("Rohan will index DB by Friday"))
+
+    def test_non_committal_dialogue_returns_no_items(self):
+        """Casual dialogue must not be promoted into a decision by the fallback parser."""
+        result = _extract_from_text_directly("Hello everyone. Thanks for joining. Let's catch up tomorrow.")
+        self.assertEqual(result, {"decisions": [], "tasks": []})
 
 
 if __name__ == "__main__":

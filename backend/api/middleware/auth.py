@@ -97,3 +97,8 @@ async def require_role(required_role: str, user: dict = Depends(get_current_user
             detail=f"Requires {required_role} role or higher",
         )
     return user
+
+
+async def require_manager(user: dict = Depends(get_current_user)) -> dict:
+    """Require a manager, leadership, or administrator for governance actions."""
+    return await require_role("manager", user)

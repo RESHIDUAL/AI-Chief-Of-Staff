@@ -19,18 +19,25 @@ Organizations suffer from "organizational amnesia" where critical decisions are 
 *   **Context:** Built for **mid-to-large enterprises** running frequent recurring meetings where knowledge compounding is critical.
 
 ## 5. Functional Requirements
-*   **Automated Ingestion:** Monitor Google Drive/Meet for new transcripts via Google ADK.
-*   **Dual-Stream Extraction:** Separate "Decisions Stream" (the 'why') from "Tasks Stream" (the 'who/what/when').
-*   **Human-in-the-Loop (HITL) Review:** A portal for reviewing and editing extracted data before final commitment.
-*   **Correction Feedback Loop:** Automatically re-embed and update Qdrant vector points when a human modifies a decision or task.
-*   **Conversational RAG Interface:** A chat-based dashboard for querying historical meeting context.
-*   **RBAC Enforcement:** Filter all retrieval results based on the querying user's permissions.
+| ID | Requirement | Acceptance criteria |
+|---|---|---|
+| FR-01 | Ingest transcripts from manual paste, Drive, or authenticated Pub/Sub. | A transcript creates one deduplicated meeting pipeline; unauthenticated direct ingestion is rejected. |
+| FR-02 | Extract decisions and tasks as distinct typed streams. | Valid output conforms to the defined JSON schema; non-committal dialogue returns empty arrays. |
+| FR-03 | Require Human-in-the-Loop review before memory commitment. | No extracted item is embedded or queryable until an authorized manager approves it. |
+| FR-04 | Re-embed approved items after a human correction. | The same Qdrant point ID is upserted with a changed embedding and an audit entry is created. |
+| FR-05 | Provide conversational retrieval over approved organizational memory. | Every answer is grounded only in retrieved, approved items and includes source citations. |
+| FR-06 | Enforce RBAC and group access at retrieval time. | A user cannot receive content whose access level or allowed groups exclude them, including fallback scans. |
+| FR-07 | Record operational traces for agent and pipeline calls. | Each extraction/RAG call records latency, token estimates, model, and prompt fingerprint. |
 
 ## 6. Non-Functional Requirements
-*   **Latency:** The system targets an end-to-end processing time (from transcript upload to reviewable output) of **60 seconds**.
-*   **Scalability:** Support for 50+ meetings per day per organization via asynchronous agent orchestration.
-*   **Reliability:** 100% data integrity for task ownership and deadlines via PostgreSQL.
-*   **Security:** Metadata-level payload filtering in the vector database.
+| ID | Requirement | Acceptance criteria |
+|---|---|---|
+| NFR-01 | Latency | Transcript-to-review output completes in under 60 seconds at the p95 target. |
+| NFR-02 | Retrieval performance | Approved-memory retrieval completes in under 3 seconds at the p95 target. |
+| NFR-03 | Scalability | The service supports 50+ meetings per organization per day with deduplication. |
+| NFR-04 | Integrity | PostgreSQL and Qdrant identifiers are reconciled and corrections are auditable. |
+| NFR-05 | Security | TLS 1.3 in transit, AES-256 encryption at rest, authenticated ingress, rate limiting, input validation, and least-privilege access are enforced by deployment and application controls. |
+| NFR-06 | Observability | OpenTelemetry spans are exported to an OTLP-compatible collector; console export is development-only. |
 
 ## 7. System Architecture Overview
 The system is organized into five distinct layers:
@@ -61,9 +68,11 @@ The system implements role-based filtering on retrieval to ensure data privacy. 
 *   **Query API:** Handles natural language queries, injecting user session/role data into the RAG Chat Agent.
 
 ## 11. Security Requirements
-*   **Authentication:** Integration with Google Workspace OAuth.
-*   **Authorization:** Role-Based Access Control (RBAC) mapped to organizational groups.
-*   **Data Protection:** Encryption at rest for PostgreSQL and Qdrant; gRPC for secure internal communication.
+*   **Authentication:** Integration with Google Workspace OAuth; a signed JWT is required for user-facing APIs. Pub/Sub push requests must supply a gateway-managed secret (or verified OIDC identity in the production gateway).
+*   **Authorization:** Role-Based Access Control (RBAC) mapped to organizational groups. Governance mutations require manager role or higher.
+*   **Gateway:** An API gateway/Cloud Load Balancer is the sole public ingress. It terminates TLS 1.3, applies WAF/OWASP protections, per-client throttling, request-size limits, and forwards only approved routes to the backend.
+*   **Data Protection:** AES-256 encryption at rest is required for PostgreSQL and Qdrant managed storage; TLS 1.3 is required for all external and service-to-service connections. Secrets are injected from a secret manager and never committed to source control.
+*   **Application Controls:** Pydantic validates request shapes and size limits; the API applies rate limits, secure response headers, request correlation IDs, and Qdrant metadata filters.
 
 ## 12. Deployment & Infrastructure
 *   **Cloud:** Google Cloud Platform (GCP).
@@ -92,3 +101,39 @@ The system implements role-based filtering on retrieval to ensure data privacy. 
     *   *Mitigation:* A "Cleaning Agent" is proposed as a **Phase 5 / Future Enhancement** to preprocess transcripts before they reach the Extraction Agent.
 *   **Feedback Loop Latency:** Re-embedding large volumes of corrected data.
     *   *Mitigation:* Use Qdrant's asynchronous upsert capabilities to ensure the UI remains responsive.
+
+## 17. Prompt Engineering Specification (CRISPE)
+
+Both Lyzr agents use version-controlled CRISPE prompts in the application source.
+
+| Agent | Capacity and insight | Response constraints | Examples and evaluation |
+|---|---|---|---|
+| Extraction Agent | Organizational-intelligence analyst processing only the supplied transcript. | JSON-only output; separate `decisions` and `tasks`; no placeholders; unknown fields are empty; confidence below 0.50 is omitted. | Few-shot examples calibrate explicit decisions, tasks, owners, deadlines, access level, and conservative extraction. |
+| RAG Chat Agent | Executive memory assistant using only retrieved approved context. | No hallucinations; entity-specific filtering; distinguish tasks from decisions; cite meeting names. | Fallback synthesis applies the same entity guardrails when the external model is unavailable. |
+
+Prompt fingerprints, rather than raw prompts or transcript data, are attached to observability spans to detect deployed prompt-version changes without exposing meeting content.
+
+## 18. LLM Observability and Tracing
+
+The orchestration layer emits OpenTelemetry spans for extraction, RAG synthesis, and every pipeline node. Each span includes `meeting_id` or `session_id`, model identifier, latency, estimated prompt/completion token counts, and prompt fingerprint. Production sets `OTEL_EXPORTER_OTLP_ENDPOINT` to an OTLP collector (such as Arize Phoenix, Grafana Tempo, or Jaeger); development may use console export. Alerts should track p95 latency, extraction failures, empty-result rate, token volume, and unexpected prompt fingerprints.
+
+## 19. Requirement Traceability Matrix
+
+| Requirement | Architecture component | Primary implementation / verification |
+|---|---|---|
+| FR-01 | API Gateway, Ingestion Layer | authenticated ingest/Pub/Sub routes; deduplication tests |
+| FR-02 | Extraction Agent | CRISPE schema and extraction tests |
+| FR-03 | HITL Review Layer, Memory Agent | review approval route and no-auto-embed pipeline test |
+| FR-04 | Memory Agent, PostgreSQL, Qdrant | correction feedback-loop test |
+| FR-05 | RAG Chat Agent, Qdrant | query route and citation response test |
+| FR-06 | Auth/RBAC middleware, Qdrant | RBAC filtering tests |
+| FR-07 / NFR-06 | Observability layer | OpenTelemetry span/export configuration |
+| NFR-01 / NFR-02 | Agentic Orchestration and RAG | latency benchmark tests |
+| NFR-04 | Persistence Layer | reconciliation operation and audit trail |
+| NFR-05 | API Gateway, Security middleware | gateway configuration and security integration tests |
+
+## 20. Canonical Data Flow
+
+`API Gateway → Ingestion Orchestrator → Extraction Agent → HITL Review Portal → Memory Agent → PostgreSQL + Qdrant → RAG Chat Agent`
+
+The Ingestion Orchestrator has no direct Qdrant write path. The Memory Agent is the only component permitted to create, update, or delete vector embeddings.

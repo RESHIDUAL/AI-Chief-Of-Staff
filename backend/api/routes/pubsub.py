@@ -6,11 +6,14 @@ Supports message deduplication, base64 payload decoding, and dead-letter queue l
 import base64
 import json
 import logging
+import secrets
 from typing import Dict, Any
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Header, Depends
 from pydantic import BaseModel, Field
 
 from backend.agents.adk_trigger import adk_trigger_agent
+from backend.config.settings import settings
+from backend.api.middleware.auth import get_current_user, require_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -20,6 +23,18 @@ _processed_pubsub_msg_ids: set[str] = set()
 
 # Dead-letter store for failed messages
 _dead_letter_queue: list[dict] = []
+
+
+def require_pubsub_token(x_pubsub_token: str | None = Header(default=None)) -> None:
+    """Authenticate Pub/Sub push traffic with a gateway-managed shared secret.
+
+    The token must be configured outside source control. Refusing requests when
+    it is absent prevents an accidentally public ingestion endpoint.
+    """
+    if not settings.PUBSUB_WEBHOOK_TOKEN:
+        raise HTTPException(status_code=503, detail="Pub/Sub webhook authentication is not configured")
+    if not x_pubsub_token or not secrets.compare_digest(x_pubsub_token, settings.PUBSUB_WEBHOOK_TOKEN):
+        raise HTTPException(status_code=401, detail="Invalid Pub/Sub webhook token")
 
 
 # ── Pub/Sub Request Schemas ───────────────────────────────────────────
@@ -39,7 +54,7 @@ class PubSubPushEnvelope(BaseModel):
 # ── Cloud Pub/Sub Webhook Endpoint ───────────────────────────────────
 
 @router.post("/pubsub")
-async def receive_pubsub_message(envelope: PubSubPushEnvelope):
+async def receive_pubsub_message(envelope: PubSubPushEnvelope, _: None = Depends(require_pubsub_token)):
     """Receive Google Cloud Pub/Sub webhook notification for new transcript events."""
     msg = envelope.message
     msg_id = msg.message_id
@@ -98,7 +113,7 @@ async def receive_pubsub_message(envelope: PubSubPushEnvelope):
 # ── Dead Letter Queue Inspection Endpoint ─────────────────────────────
 
 @router.get("/dlq")
-async def get_dead_letter_queue():
+async def get_dead_letter_queue(user: dict = Depends(require_manager)):
     """Retrieve dead-letter queue items for failed Pub/Sub messages."""
     return {
         "dlq_count": len(_dead_letter_queue),
@@ -107,14 +122,14 @@ async def get_dead_letter_queue():
 
 
 @router.delete("/dlq")
-async def clear_dead_letter_queue():
+async def clear_dead_letter_queue(user: dict = Depends(require_manager)):
     """Clear dead-letter queue."""
     _dead_letter_queue.clear()
     return {"status": "cleared", "dlq_count": 0}
 
 
 @router.post("/drive-sync")
-async def trigger_drive_sync():
+async def trigger_drive_sync(user: dict = Depends(get_current_user)):
     """Manually trigger a scan of your configured Google Drive folder for new transcript files."""
     from backend.agents.drive_sync_worker import sync_drive_folder_once
     try:
@@ -127,4 +142,3 @@ async def trigger_drive_sync():
     except Exception as e:
         logger.error(f"Manual Drive Sync error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-

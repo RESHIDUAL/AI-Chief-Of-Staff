@@ -8,9 +8,8 @@ Role resolution supports two modes via RBAC_MODE in .env:
 
 import json
 import logging
-import os
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -200,43 +199,20 @@ GOOGLE_OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
 
 
-def _get_redirect_uri(request: Request) -> str:
-    backend_url = os.environ.get("BACKEND_URL", "").rstrip("/")
-    if not backend_url:
-        backend_url = str(request.base_url).rstrip("/")
-        if "onrender.com" in backend_url and backend_url.startswith("http://"):
-            backend_url = backend_url.replace("http://", "https://", 1)
-    return f"{backend_url}/api/v1/auth/callback"
-
-
-def _get_frontend_url(request: Request) -> str:
-    frontend_url = os.environ.get("FRONTEND_URL", "").rstrip("/")
-    if not frontend_url:
-        referer = request.headers.get("referer") or request.headers.get("origin") or ""
-        if referer and "vercel.app" in referer:
-            from urllib.parse import urlparse
-            p = urlparse(referer)
-            frontend_url = f"{p.scheme}://{p.netloc}"
-        else:
-            frontend_url = "https://ai-chief-of-staff-aby9jnqa4-reshiduals.vercel.app"
-    return frontend_url
-
-
 @router.get("/login/google")
-async def google_login(request: Request):
+async def google_login():
     """Redirect user to Google OAuth 2.0 consent screen."""
-    client_id = (settings.GOOGLE_CLIENT_ID or "").strip('"').strip("'")
-    if not client_id:
+    if not settings.GOOGLE_CLIENT_ID:
         raise HTTPException(
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail="GOOGLE_CLIENT_ID is not configured in .env.",
+            detail="GOOGLE_CLIENT_ID is not configured in .env. Use POST /api/v1/auth/login/demo for dev login.",
         )
 
-    redirect_uri = _get_redirect_uri(request)
+    redirect_uri = "http://localhost:8000/api/v1/auth/callback"
     scope = "openid email profile"
     auth_url = (
         f"{GOOGLE_OAUTH_AUTH_URL}?"
-        f"client_id={client_id}&"
+        f"client_id={settings.GOOGLE_CLIENT_ID}&"
         f"redirect_uri={redirect_uri}&"
         f"response_type=code&"
         f"scope={scope}&"
@@ -248,20 +224,20 @@ async def google_login(request: Request):
 
 @router.get("/callback")
 async def google_callback(
-    request: Request,
     code: str = "",
     db: AsyncSession = Depends(get_db),
 ):
-    """Handle Google OAuth 2.0 callback, exchange code for user info & issue JWT."""
+    """Handle Google OAuth 2.0 callback, exchange code for user info & issue JWT.
+
+    Redirects to frontend with JWT in URL fragment (#token=...), never a query param.
+    """
     if not code:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Missing OAuth authorization code from Google",
         )
 
-    client_id = (settings.GOOGLE_CLIENT_ID or "").strip('"').strip("'")
-    client_secret = (settings.GOOGLE_CLIENT_SECRET or "").strip('"').strip("'")
-    redirect_uri = _get_redirect_uri(request)
+    redirect_uri = "http://localhost:8000/api/v1/auth/callback"
 
     async with httpx.AsyncClient() as client:
         # 1. Exchange authorization code for tokens
@@ -269,8 +245,8 @@ async def google_callback(
             GOOGLE_OAUTH_TOKEN_URL,
             data={
                 "code": code,
-                "client_id": client_id,
-                "client_secret": client_secret,
+                "client_id": settings.GOOGLE_CLIENT_ID,
+                "client_secret": settings.GOOGLE_CLIENT_SECRET,
                 "redirect_uri": redirect_uri,
                 "grant_type": "authorization_code",
             },
@@ -319,20 +295,18 @@ async def google_callback(
         except Exception as e:
             logger.warning(f"PostgreSQL user upsert skipped: {e}")
 
-        # 5. Issue internal JWT with sub=email
+        # 5. Issue internal JWT with sub=email (not db id)
         token_payload = {
             "sub": email,
             "email": email,
             "name": name,
             "role": role,
             "allowed_groups": allowed_groups,
-            "avatar_url": avatar,
         }
         jwt_token = create_access_token(token_payload)
 
         # SECURITY: Redirect with token in URL fragment (#token=...), never query param
-        frontend_origin = _get_frontend_url(request)
-        frontend_url = f"{frontend_origin}/#token={jwt_token}"
+        frontend_url = f"http://localhost:3000/#token={jwt_token}"
         return RedirectResponse(url=frontend_url)
 
 
@@ -341,15 +315,12 @@ async def google_callback(
 @router.get("/me", response_model=UserProfile)
 async def get_me(user: dict = Depends(get_current_user)):
     """Return the authenticated user's profile and RBAC permissions."""
-    email = user.get("email") or user.get("sub") or ""
-    name = user.get("name") or email
-    user_id = user.get("user_id") or user.get("sub") or email or "user"
     return UserProfile(
-        user_id=user_id,
-        email=email,
-        name=name,
-        role=user.get("role", "leadership"),
-        allowed_groups=user.get("allowed_groups", ["all", "engineering", "leadership"]),
+        user_id=user.get("user_id", ""),
+        email=user.get("email", ""),
+        name=user.get("name", ""),
+        role=user.get("role", "employee"),
+        allowed_groups=user.get("allowed_groups", ["all"]),
         avatar_url=user.get("avatar_url"),
     )
 

@@ -8,6 +8,7 @@ from backend.api.models.schemas import TranscriptIngestRequest, ExtractionRespon
 from backend.agents.ingestion_orchestrator import ingest_transcript, get_pipeline, list_pipelines
 from backend.db.postgres.database import get_db
 from backend.db.postgres import crud
+from backend.api.middleware.auth import get_current_user, require_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -17,6 +18,7 @@ router = APIRouter()
 async def ingest_transcript_endpoint(
     req: TranscriptIngestRequest,
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     """Ingest a raw meeting transcript and extract decisions & tasks.
 
@@ -112,7 +114,7 @@ async def ingest_transcript_endpoint(
 
 
 @router.post("/webhook")
-async def ingest_webhook(payload: dict):
+async def ingest_webhook(payload: dict, user: dict = Depends(require_manager)):
     """Receive Pub/Sub events from Google Workspace."""
     logger.info(f"Webhook received: {payload}")
     return {
@@ -122,7 +124,7 @@ async def ingest_webhook(payload: dict):
 
 
 @router.get("/pipeline/{meeting_id}")
-async def get_pipeline_status(meeting_id: str):
+async def get_pipeline_status(meeting_id: str, user: dict = Depends(get_current_user)):
     """Check the processing status of a meeting pipeline."""
     state = get_pipeline(meeting_id)
     if not state:
@@ -140,7 +142,7 @@ async def get_pipeline_status(meeting_id: str):
 
 
 @router.get("/pipelines")
-async def list_all_pipelines():
+async def list_all_pipelines(user: dict = Depends(get_current_user)):
     """List all pipeline states."""
     pipelines = list_pipelines()
     return [
@@ -157,7 +159,7 @@ async def list_all_pipelines():
 
 
 @router.get("/meetings")
-async def list_meetings(db: AsyncSession = Depends(get_db)):
+async def list_meetings(db: AsyncSession = Depends(get_db), user: dict = Depends(get_current_user)):
     """List all meetings from PostgreSQL or memory store."""
     try:
         meetings = await crud.list_meetings(db)

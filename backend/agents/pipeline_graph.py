@@ -7,9 +7,9 @@ Defines the agentic workflow graph:
   [Extraction Agent]  ── (Extracts Decisions & Tasks with Confidence Scores)
          │
          ▼
- [Score & Route Node]
-     ├── High Confidence (>= 0.90) ──► [Auto-Approve & Embed (Memory Agent)]
-     └── Medium/Low (< 0.90)       ──► [HITL Review Queue]
+ [Score & Route Node] ──► [HITL Review Queue] ──► [Memory Agent]
+
+No extraction is embedded until an authorized reviewer explicitly approves it.
 """
 
 import logging
@@ -17,7 +17,6 @@ from typing import TypedDict, List, Dict, Any, Optional
 from datetime import datetime, timezone
 
 from backend.agents.extraction_agent import extract_from_transcript
-from backend.agents.memory_agent import commit_decision, commit_task
 from backend.observability.tracing import traced_node
 
 logger = logging.getLogger(__name__)
@@ -110,43 +109,14 @@ def node_score_and_route(state: MeetingState) -> MeetingState:
 
 @traced_node("auto_embed")
 def node_auto_embed(state: MeetingState) -> MeetingState:
-    """Node 3: Memory Agent automatically embeds and commits high-confidence items to Qdrant."""
-    logger.info(f"[Graph Node: Auto-Embed] Committing high-confidence items for {state['meeting_id']}")
-    state["current_step"] = "auto_embedding"
-
-    for d in state["auto_approved_decisions"]:
-        try:
-            pid = commit_decision(
-                content=d.get("content", ""),
-                meeting_id=state["meeting_id"],
-                meeting_name=state["meeting_name"],
-                access_level=d.get("access_level", state["default_access_level"]),
-                participants=d.get("participants", []),
-                confidence_score=d.get("confidence_score", 0.95),
-            )
-            d["qdrant_point_id"] = pid
-        except Exception as e:
-            logger.error(f"Auto-embed decision failed: {e}")
-
-    for t in state["auto_approved_tasks"]:
-        try:
-            pid = commit_task(
-                description=t.get("description", ""),
-                owner=t.get("owner", ""),
-                deadline=t.get("deadline", ""),
-                meeting_id=state["meeting_id"],
-                meeting_name=state["meeting_name"],
-                access_level=t.get("access_level", state["default_access_level"]),
-                confidence_score=t.get("confidence_score", 0.95),
-            )
-            t["qdrant_point_id"] = pid
-        except Exception as e:
-            logger.error(f"Auto-embed task failed: {e}")
-
-    if not state["pending_review_decisions"] and not state["pending_review_tasks"]:
-        state["status"] = "committed"
-    else:
-        state["status"] = "reviewing"
+    """Node 3: retain every extraction for human review; never auto-commit memory."""
+    logger.info(f"[Graph Node: HITL Queue] Queueing extracted items for {state['meeting_id']}")
+    state["current_step"] = "awaiting_human_review"
+    state["auto_approved_decisions"] = []
+    state["auto_approved_tasks"] = []
+    state["pending_review_decisions"] = list(state["decisions"])
+    state["pending_review_tasks"] = list(state["tasks"])
+    state["status"] = "reviewing"
 
     state["updated_at"] = datetime.now(timezone.utc).isoformat()
     return state

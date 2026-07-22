@@ -8,7 +8,8 @@ import logging
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.api.middleware.auth import get_current_user
+from backend.api.middleware.auth import get_current_user, require_manager
+from backend.api.middleware.rbac import user_can_access
 
 from backend.api.models.schemas import (
     ApproveDecisionRequest,
@@ -66,7 +67,7 @@ async def get_all_pending(db: AsyncSession = Depends(get_db), user: dict = Depen
 
 
 @router.get("/pending-sessions")
-async def get_pending_sessions():
+async def get_pending_sessions(user: dict = Depends(get_current_user)):
     """List all active meeting ingestion sessions from pipeline graph."""
     from backend.agents.ingestion_orchestrator import list_pipelines
     pipelines = list_pipelines()
@@ -102,7 +103,7 @@ async def get_pending_sessions():
 
 
 @router.get("/pending/{meeting_id}")
-async def get_pending_items(meeting_id: str, db: AsyncSession = Depends(get_db)):
+async def get_pending_items(meeting_id: str, db: AsyncSession = Depends(get_db), user: dict = Depends(get_current_user)):
     """Get pending (unverified) items for a specific meeting."""
     try:
         meeting = await crud.get_meeting(db, meeting_id)
@@ -160,6 +161,7 @@ async def approve_decision(
     decision_id: int,
     req: ApproveDecisionRequest,
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(require_manager),
 ):
     """Approve a decision — embed and commit to Qdrant + mark verified in PostgreSQL."""
     logger.info(f"Approving decision {decision_id} for meeting {req.meeting_id}")
@@ -197,6 +199,7 @@ async def approve_task(
     task_id: int,
     req: ApproveTaskRequest,
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(require_manager),
 ):
     """Approve a task — embed and commit to Qdrant + mark verified in PostgreSQL."""
     logger.info(f"Approving task {task_id} for meeting {req.meeting_id}")
@@ -239,6 +242,7 @@ async def approve_task(
 async def batch_approve(
     items: list[ApproveDecisionRequest | ApproveTaskRequest],
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(require_manager),
 ):
     """Batch approve multiple items at once."""
     results = []
@@ -282,6 +286,7 @@ async def edit_committed_item(
     point_id: str,
     req: EditItemRequest,
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(require_manager),
 ):
     """Edit a committed item — triggers the correction feedback loop."""
     logger.info(f"Correction feedback loop triggered for point {point_id}")
@@ -331,7 +336,7 @@ async def edit_committed_item(
 # ── Delete / Reject ─────────────────────────────────────────────────
 
 @router.delete("/reject/{point_id}")
-async def reject_item(point_id: str):
+async def reject_item(point_id: str, user: dict = Depends(require_manager)):
     """Delete an item from organizational memory."""
     logger.info(f"Deleting point {point_id}")
     remove_item(point_id)
@@ -339,7 +344,7 @@ async def reject_item(point_id: str):
 
 
 @router.delete("/session/{meeting_id}")
-async def delete_meeting_session(meeting_id: str):
+async def delete_meeting_session(meeting_id: str, user: dict = Depends(require_manager)):
     """Delete an entire meeting ingestion session from active memory and review."""
     from backend.agents.ingestion_orchestrator import delete_pipeline
     logger.info(f"Deleting meeting session {meeting_id}")
@@ -353,6 +358,14 @@ async def delete_meeting_session(meeting_id: str):
 async def list_committed_items(user: dict = Depends(get_current_user)):
     """List all committed items in organizational memory (from Qdrant)."""
     points = get_all()
+    groups = set(user.get("allowed_groups", ["all"]))
+
+    def accessible(payload: dict) -> bool:
+        if not user_can_access(user.get("role", "employee"), payload.get("access_level", "general")):
+            return False
+        allowed = set(payload.get("allowed_groups", ["all"]))
+        return "all" in groups or "all" in allowed or bool(groups & allowed)
+
     return [
         {
             "id": str(p.id),
@@ -365,7 +378,7 @@ async def list_committed_items(user: dict = Depends(get_current_user)):
             "corrected": p.payload.get("corrected", False),
             "timestamp": p.payload.get("timestamp"),
         }
-        for p in points
+        for p in points if accessible(p.payload)
     ]
 
 

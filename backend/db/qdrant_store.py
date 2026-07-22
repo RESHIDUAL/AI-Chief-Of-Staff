@@ -7,8 +7,6 @@
 # MUST go through the Memory Agent (backend/agents/memory_agent.py) which is
 # invoked exclusively by:
 #   - review.py: approve_decision, approve_task, batch_approve, edit_committed_item
-#   - pipeline_graph.py: node_auto_embed (for high-confidence auto-approval)
-#
 # Direct writes from ingestion.py are PROHIBITED. Ingestion stores raw meeting
 # metadata in PostgreSQL only; vector embedding is deferred to the review/approval
 # step to enforce the Human-in-the-Loop guarantee.
@@ -25,6 +23,7 @@ from qdrant_client.models import (
     FieldCondition,
     MatchValue,
     MatchAny,
+    PayloadSchemaType,
 )
 from backend.config.settings import settings
 
@@ -45,7 +44,7 @@ def get_client() -> QdrantClient:
 
 
 def init_collection() -> None:
-    """Create the org_memory collection if it doesn't exist."""
+    """Create the collection and keyword indexes required for RBAC filters."""
     try:
         client = get_client()
         existing = [c.name for c in client.get_collections().collections]
@@ -56,6 +55,20 @@ def init_collection() -> None:
                     size=settings.EMBED_DIM, distance=Distance.COSINE
                 ),
             )
+        # Qdrant Cloud requires a payload index before a field is used in a
+        # filtered vector query. These are safe to request on every startup.
+        for field_name in ("access_level", "allowed_groups", "type"):
+            try:
+                client.create_payload_index(
+                    collection_name=settings.QDRANT_COLLECTION_NAME,
+                    field_name=field_name,
+                    field_schema=PayloadSchemaType.KEYWORD,
+                    wait=True,
+                )
+            except Exception as index_error:
+                # Existing-index responses differ between Qdrant client/server
+                # versions, so retain startup availability while logging detail.
+                logger.debug(f"Qdrant payload index '{field_name}' already exists or was skipped: {index_error}")
     except Exception as e:
         logger.warning(f"Qdrant collection init skipped ({e})")
 

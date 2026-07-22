@@ -10,8 +10,7 @@ from backend.api.middleware.auth import get_current_user
 from backend.api.middleware.rbac import get_qdrant_access_filter, get_qdrant_group_filter
 from backend.db.embeddings import embed_text
 from backend.db.qdrant_store import search, get_all
-from backend.agents.rag_chat_agent import answer_query
-from backend.agents.ingestion_orchestrator import list_pipelines
+from backend.agents.rag_chat_agent import answer_query, _extract_person_name_from_query
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -19,13 +18,44 @@ router = APIRouter()
 # In-memory conversation history (per session) for multi-turn chat
 _conversations: dict[str, list[dict]] = {}
 
-STOP_WORDS = {"what", "who", "where", "when", "why", "how", "is", "are", "the", "a", "an", "for", "to", "in", "on", "of", "and", "or", "did", "we", "do", "about", "tasks", "decisions"}
+STOP_WORDS = {"what", "who", "where", "when", "why", "how", "is", "are", "was", "were", "the", "a", "an", "for", "to", "in", "on", "of", "and", "or", "did", "we", "do", "about", "tasks", "task", "decisions", "assigned"}
 
 
 def _extract_query_keywords(query: str) -> list[str]:
     """Extract significant keywords from natural language query."""
     words = re.findall(r"\b[A-Za-z0-9_-]+\b", query.lower())
     return [w for w in words if w not in STOP_WORDS and len(w) > 1]
+
+
+def _payload_is_accessible(payload: dict, user_role: str, user_groups: list[str]) -> bool:
+    """Apply the same RBAC checks to fallback scans as vector queries."""
+    if user_role not in ("leadership", "admin") and payload.get("access_level", "general") != "general":
+        return False
+    allowed_groups = payload.get("allowed_groups", ["all"])
+    return "all" in user_groups or "all" in allowed_groups or bool(set(user_groups) & set(allowed_groups))
+
+
+def _is_assignment_lookup(query: str) -> bool:
+    """Identify questions asking for the owner of a described action item."""
+    return bool(re.search(r"\bwho\s+(?:was|is)\s+assigned\s+to\b", query, re.IGNORECASE))
+
+
+def _assignment_keywords(query: str) -> list[str]:
+    """Keep only the requested action phrase, excluding 'who was assigned to'."""
+    subject = re.sub(r"^\s*who\s+(?:was|is)\s+assigned\s+to\s+", "", query, flags=re.IGNORECASE)
+    return _extract_query_keywords(subject)
+
+
+def _assignment_answer(payload: dict) -> str:
+    """Deterministically answer an owner lookup from the single best matching task."""
+    owner = payload.get("owner") or "No owner is recorded"
+    description = payload.get("description") or payload.get("content", "").replace("Task: ", "").split(". Owner:")[0]
+    deadline = payload.get("deadline")
+    meeting = payload.get("meeting_name", "the meeting record")
+    answer = f"**{owner}** was assigned to **{description}** in *{meeting}*."
+    if deadline:
+        answer += f" Deadline: **{deadline}**."
+    return answer
 
 
 @router.post("/", response_model=QueryResponse)
@@ -42,6 +72,7 @@ async def query_organizational_memory(
     logger.info(f"RAG query from role={user_role}, session={session_id}: {req.query[:80]}...")
 
     candidate_map: dict[str, dict] = {}
+    assignment_lookup = _is_assignment_lookup(req.query)
 
     # 1. Vector Search in Qdrant
     try:
@@ -53,6 +84,7 @@ async def query_organizational_memory(
             vector=query_vector,
             access_level=access_filter,
             allowed_groups=group_filter,
+            item_type="task" if assignment_lookup else None,
             limit=10,
         )
 
@@ -75,8 +107,9 @@ async def query_organizational_memory(
             pid = str(getattr(p, "id", uuid.uuid4()))
             payload = getattr(p, "payload", {}) or {}
             
-            acc = payload.get("access_level", "general")
-            if user_role not in ("leadership", "admin") and acc != "general":
+            if not _payload_is_accessible(payload, user_role, user_groups):
+                continue
+            if assignment_lookup and payload.get("type") != "task":
                 continue
 
             if pid not in candidate_map:
@@ -89,52 +122,7 @@ async def query_organizational_memory(
     except Exception as e:
         logger.warning(f"Qdrant get_all skipped: {e}")
 
-    # 3. Ingest items from active ingestion pipeline states
-    pipelines = list_pipelines()
-    for pipe in pipelines:
-        meeting_name = pipe.meeting_name
-        for idx, d in enumerate(pipe.decisions):
-            acc = d.get("access_level", "general")
-            if user_role not in ("leadership", "admin") and acc != "general":
-                continue
-            pid = f"dec-{pipe.meeting_id}-{idx}"
-            if pid not in candidate_map:
-                candidate_map[pid] = {
-                    "point": None,
-                    "payload": {
-                        "content": d.get("content", ""),
-                        "meeting_name": meeting_name,
-                        "type": "decision",
-                        "access_level": acc,
-                    },
-                    "vector_score": 0.8,
-                    "keyword_score": 0.0,
-                }
-
-        for idx, t in enumerate(pipe.tasks):
-            acc = t.get("access_level", "general")
-            if user_role not in ("leadership", "admin") and acc != "general":
-                continue
-            desc = t.get("description", "")
-            owner = t.get("owner", "")
-            deadline = t.get("deadline", "")
-            content_full = f"{desc} (Owner: {owner or 'Unassigned'}{', Deadline: ' + deadline if deadline else ''})"
-            pid = f"task-{pipe.meeting_id}-{idx}"
-            if pid not in candidate_map:
-                candidate_map[pid] = {
-                    "point": None,
-                    "payload": {
-                        "content": content_full,
-                        "meeting_name": meeting_name,
-                        "type": "task",
-                        "access_level": acc,
-                        "owner": owner,
-                    },
-                    "vector_score": 0.8,
-                    "keyword_score": 0.0,
-                }
-
-    keywords = _extract_query_keywords(req.query)
+    keywords = _assignment_keywords(req.query) if assignment_lookup else _extract_query_keywords(req.query)
     target_person = _extract_person_name_from_query(req.query)
 
     # Entity-Specific Precision Filter: If query names a specific person, keep ONLY matching candidates
@@ -168,7 +156,13 @@ async def query_organizational_memory(
 
     # Rank candidate items descending by final score
     candidates.sort(key=lambda x: x["final_score"], reverse=True)
-    top_candidates = candidates[:5]
+    # Owner questions require an exact action match. Never pad this answer with
+    # semantically adjacent tasks or decisions.
+    if assignment_lookup:
+        exact_matches = [c for c in candidates if c["keyword_score"] > 0]
+        top_candidates = exact_matches[:1]
+    else:
+        top_candidates = candidates[:5]
 
     if not top_candidates:
         answer_text = "No relevant organizational memory found for your access level."
@@ -195,6 +189,13 @@ async def query_organizational_memory(
         )
 
     context = "\n".join(context_lines)
+
+    if assignment_lookup:
+        answer_text = _assignment_answer(top_candidates[0]["payload"])
+        if session_id not in _conversations:
+            _conversations[session_id] = []
+        _conversations[session_id].append({"query": req.query, "answer": answer_text})
+        return QueryResponse(answer=answer_text, sources=sources, session_id=session_id)
 
     # Multi-turn conversation context
     history = _conversations.get(session_id, [])

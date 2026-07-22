@@ -6,6 +6,7 @@ and strict role-based memory synthesis.
 
 import logging
 import re
+import hashlib
 from lyzr_python_sdk import LyzrAgentAPI
 from backend.config.settings import settings
 from backend.observability.tracing import agent_span
@@ -55,7 +56,10 @@ def _extract_person_name_from_query(query: str) -> str | None:
         if re.search(rf"\b{n}\b", query_lower):
             return n.capitalize()
 
-    match = re.search(r"\b(for|to|by|is|doing|about|owner|assigned to|assigned for)\s+([A-Z][a-z]+)", query)
+    # A capitalized verb at the start of an action description (for example,
+    # "Who was assigned to Coordinate ...?") is not a person's name.  Only
+    # infer an arbitrary name when it is the complete target of the clause.
+    match = re.search(r"\b(for|to|by|is|doing|about|owner|assigned to|assigned for)\s+([A-Z][a-z]+)(?:\?|$)", query)
     if match:
         name = match.group(2)
         if name.lower() not in ("what", "which", "how", "who", "when", "where", "why", "the", "a", "an", "all", "our", "task", "tasks"):
@@ -113,7 +117,12 @@ def answer_query(
     session_id: str = "org-memory-chat",
 ) -> str:
     """Send query + context to Lyzr RAG Chat Agent or synthesize direct contextual answer with entity guardrails."""
-    with agent_span("rag_chat_agent", "answer_query", {"session_id": session_id, "model": "lyzr_rag", "prompt_token_count": (len(query) + len(context)) // 4}) as span:
+    with agent_span("rag_chat_agent", "answer_query", {
+        "session_id": session_id,
+        "model": "lyzr_rag",
+        "prompt_token_count": (len(query) + len(context)) // 4,
+        "prompt_fingerprint": hashlib.sha256(RAG_SYSTEM_PROMPT.encode()).hexdigest()[:16],
+    }) as span:
         try:
             client = get_client()
             prompt = f"{RAG_SYSTEM_PROMPT}\n\nContext:\n{context}\n\nQuestion: {query}"
