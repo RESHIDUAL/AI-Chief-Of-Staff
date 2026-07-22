@@ -209,6 +209,19 @@ def _get_redirect_uri(request: Request) -> str:
     return f"{backend_url}/api/v1/auth/callback"
 
 
+def _get_frontend_url(request: Request) -> str:
+    frontend_url = os.environ.get("FRONTEND_URL", "").rstrip("/")
+    if not frontend_url:
+        referer = request.headers.get("referer") or request.headers.get("origin") or ""
+        if referer and "vercel.app" in referer:
+            from urllib.parse import urlparse
+            p = urlparse(referer)
+            frontend_url = f"{p.scheme}://{p.netloc}"
+        else:
+            frontend_url = "https://ai-chief-of-staff-aby9jnqa4-reshiduals.vercel.app"
+    return frontend_url
+
+
 @router.get("/login/google")
 async def google_login(request: Request):
     """Redirect user to Google OAuth 2.0 consent screen."""
