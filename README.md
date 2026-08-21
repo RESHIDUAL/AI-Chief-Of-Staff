@@ -1,4 +1,4 @@
-# AI Chief of Staff (Executive Intelligence & Memory Automation Platform)
+# EchoMind (Executive Intelligence & Memory Automation Platform)
 
 An enterprise executive automation platform engineered to capture, structure, verify, and recall organizational memory with sub-second accuracy. It converts unstructured meeting dialogue into verified decisions and tasks, enforces strict Role-Based Access Control (RBAC), and serves executive queries with precision.
 
